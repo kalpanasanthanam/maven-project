@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:context="http://www.springframework.org/schema/context" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="localhost" port="8081" connectionIdleTimeout="120000" doc:name="HTTP Listener Configuration"/>
+    <http:request-config name="Workflow_Request_Configuration" host="fdwlt02.flexagon" port="7003" basePath="/flexdeploy/rest/workflow" connectionIdleTimeout="1500000" doc:name="HTTP Request Configuration"/>
+    <http:request-config name="Approve_Request_Configuration" host="fdwlt02.flexagon" port="7003" basePath="/flexdeploy/rest/task" doc:name="HTTP Request Configuration"/>
+    <http:request-config name="UpdateProperty_Request_Configuration" host="fdwlt02.flexagon" port="7003" basePath="/flexdeploy/rest/properties" doc:name="HTTP Request Configuration"/>
+    <flow name="BuildDeployMainFlow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/buildProject" allowedMethods="POST" doc:name="HTTP"/>
+        <logger message="#[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
+        <set-variable variableName="WorkFlowRequestStatus" value="" doc:name="WFRequestStatusVariable"/>
+        <flow-ref name="BuildProjectFlow" doc:name="BuildProjectFlow"/>
+        <flow-ref name="SetWFRequestStatus" doc:name="SetWFRequestStatus"/>
+        <logger message="#[flowVars.WorkFlowRequestStatus]" level="INFO" doc:name="Logger"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars['WorkFlowRequestStatus'] == 'COMPLETED']">
+                <set-payload value="{  &quot;authentication&quot;:   {     &quot;userId&quot;:&quot;#['${fd.username}']&quot;,     &quot;password&quot;: &quot;#['${fd.password}']&quot;  },  &quot;instanceCodes&quot;:[&quot;JMULE&quot;],  &quot;environmentCode&quot;:&quot;#['${fd.env1}']&quot;,  &quot;qualifiedProjectName&quot;:&quot;/FlexDeploy/JackTest/MuleSoft/MuleSoftTest_Madhu&quot;,  &quot;forceDeploy&quot;: true,  &quot;inputs&quot;: [  {     &quot;code&quot;:&quot;input&quot;,     &quot;value&quot;: &quot;asd&quot;  } ],  &quot;flexFields&quot;: [ {     &quot;code&quot;: &quot;deployff&quot;,     &quot;value&quot;:&quot;abcd&quot;  } ] }" doc:name="SetDeployToDEV"/>
+                <flow-ref name="DeployProjectFlow" doc:name="DeployProjectFlow"/>
+                <flow-ref name="SetWFRequestStatus" doc:name="SetWFRequestStatus"/>
+                <choice doc:name="Choice">
+                    <when expression="#[flowVars['WorkFlowRequestStatus'] == 'COMPLETED']">
+                        <flow-ref name="UpdatePropertiesFlow" doc:name="UpdatePropertiesFlow"/>
+                        <object-to-byte-array-transformer doc:name="Object to Byte Array"/>
+                        <logger message="QA &amp; UAT Deploy" level="INFO" doc:name="Logger"/>
+                        <scatter-gather doc:name="Scatter-Gather">
+                            <processor-chain>
+                                <set-payload value="{  &quot;authentication&quot;:   {     &quot;userId&quot;:&quot;#['${fd.username}']&quot;,     &quot;password&quot;: &quot;#['${fd.password}']&quot;  },  &quot;instanceCodes&quot;:[&quot;JMULE&quot;],  &quot;environmentCode&quot;:&quot;#['${fd.env2}']&quot;,  &quot;qualifiedProjectName&quot;:&quot;/FlexDeploy/JackTest/MuleSoft/MuleSoftTest_Madhu&quot;,  &quot;forceDeploy&quot;: true,  &quot;inputs&quot;: [  {   &quot;code&quot;:&quot;input&quot;,  &quot;value&quot;: &quot;asd&quot;  }  ],  &quot;flexFields&quot;: [  {     &quot;code&quot;: &quot;deployff&quot;,&quot;value&quot;:&quot;abcd&quot;  }  ] }" doc:name="SetDeploytoQA"/>
+                                <flow-ref name="DeployProjectFlow" doc:name="DeployProjectFlow"/>
+                            </processor-chain>
+                            <processor-chain>
+                                <set-payload value="{  &quot;authentication&quot;:   {     &quot;userId&quot;:&quot;#['${fd.username}']&quot;,     &quot;password&quot;: &quot;#['${fd.password}']&quot;  },  &quot;instanceCodes&quot;:[&quot;JMULE&quot;],  &quot;environmentCode&quot;:&quot;#['${fd.env3}']&quot;,  &quot;qualifiedProjectName&quot;:&quot;/FlexDeploy/JackTest/MuleSoft/MuleSoftTest_Madhu&quot;,  &quot;forceDeploy&quot;: true,  &quot;inputs&quot;: [  {   &quot;code&quot;:&quot;input&quot;,  &quot;value&quot;: &quot;asd&quot;  }  ],  &quot;flexFields&quot;: [  {     &quot;code&quot;: &quot;deployff&quot;,&quot;value&quot;:&quot;abcd&quot;  }  ] }" doc:name="SetDeploytoUAT"/>
+                                <flow-ref name="DeployProjectFlow" doc:name="DeployProjectFlow"/>
+                            </processor-chain>
+                        </scatter-gather>
+                        <json:object-to-json-transformer doc:name="Object to JSON"/>
+                        <dw:transform-message doc:name="Transform Message">
+                            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	"WFRequestIds":flatten payload
+}]]></dw:set-payload>
+                        </dw:transform-message>
+                        <set-variable variableName="WFRequestId1" value="#[json:WFRequestIds[0]]" doc:name="Set_WFRequestId1"/>
+                        <set-variable variableName="WFRequestId2" value="#[json:WFRequestIds[1]]" doc:name="Set_WFRequestId2"/>
+                        <set-variable variableName="WorkFlowRequestID" value="#[flowVars.WFRequestId1]" doc:name="QA_WFRequestID variable"/>
+                        <logger message="QA Deploy" level="INFO" doc:name="Logger"/>
+                        <flow-ref name="SetWFRequestStatus" doc:name="SetWFRequestStatus"/>
+                        <set-variable variableName="WorkFlowRequestID" value="#[flowVars.WFRequestId2]" doc:name="UAT_WFRequestID variable"/>
+                        <logger message="UAT Deploy" level="INFO" doc:name="Logger"/>
+                        <flow-ref name="SetWFRequestStatus" doc:name="SetWFRequestStatus"/>
+                    </when>
+                    <otherwise>
+                        <logger message="#[flowVars['WorkFlowRequestStatus']]" level="INFO" doc:name="Logger"/>
+                    </otherwise>
+                </choice>
+                <logger message="Deploy completed for all 3 Environments" level="INFO" doc:name="Logger"/>
+            </when>
+            <otherwise>
+                <component class="fd.training.mulesoft.custom.BuildProcessing" doc:name="BuildProcessing"/>
+            </otherwise>
+        </choice>
+        <logger message="Build&amp;Deploy Flow Completed Successfully" level="INFO" doc:name="Logger"/>
+    </flow>
+    <sub-flow name="DeployProjectFlow">
+        <http:request config-ref="Workflow_Request_Configuration" path="/deployProject" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <set-variable variableName="WorkFlowRequestID" value="#[message.payloadAs(java.lang.String)]" doc:name="DeployWorkFlowRequestID"/>
+        <logger message="Deploy #[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
+    </sub-flow>
+    <sub-flow name="UpdatePropertiesFlow">
+        <set-payload value="{   &quot;authentication&quot;:    {       &quot;userId&quot;:&quot;#['${fd.username}']&quot; ,       &quot;password&quot;: &quot;#['${fd.password}']&quot;    },   &quot;properties&quot;: [    {       &quot;qualifiedProjectName&quot;: &quot;/FlexDeploy/JackTest/MuleSoft/MuleSoftTest_Madhu&quot;,       &quot;code&quot;: &quot;MULE_TEST_PROPERTY&quot;,       &quot;value&quot;: &quot;FD_APPLICATION_NAME&quot;,       &quot;isExpression&quot;: &quot;true&quot;    }]} " doc:name="SetUpdatePropertyPayload"/>
+        <http:request config-ref="UpdateProperty_Request_Configuration" path="/updateProperties" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <logger message="Property Updated" level="INFO" doc:name="Logger"/>
+
+    </sub-flow>
+    <sub-flow name="BuildProjectFlow">
+        <http:request config-ref="Workflow_Request_Configuration" path="/buildProject" method="POST" doc:name="BuildProject"/>
+        <set-variable variableName="WorkFlowRequestID" value="#[message.payloadAs(java.lang.String)]" doc:name="BuildWorkFlowRequestID"/>
+        <logger message="Build  #[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
+    </sub-flow>
+    <sub-flow name="WFRequestStatusCounter">
+        <set-variable variableName="WorkFlowRequestStatusCounter" value="#[0]" doc:name="Initialize_WFRequestStatusCounter"/>
+    </sub-flow>
+    <sub-flow name="SetWFRequestStatus">
+        <flow-ref name="WFRequestStatusCounter" doc:name="WFRequestStatusCounter"/>
+        <flow-ref name="WorkFlowRequestStatusFlow" doc:name="WorkFlowRequestStatusFlow"/>
+    </sub-flow>
+
+    <flow name="WorkFlowRequestStatusFlow">
+        <set-payload value="{     &quot;authentication&quot;:     {         &quot;userId&quot;: &quot;#['${fd.username}']&quot;,         &quot;password&quot;: &quot;#['${fd.password}']&quot;},     &quot;workflowRequestId&quot;: #[flowVars.WorkFlowRequestID] } " doc:name="SetWFRequestPayload"/>
+
+        <set-variable variableName="counter" value="#[flowVars['WorkFlowRequestStatusCounter'] + 1]" doc:name="Increment_Counter"/>
+
+        <http:request config-ref="Workflow_Request_Configuration" path="/getWorkflowRequestStatus" method="POST" doc:name="getWorkFlowRequestStatus">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <set-variable variableName="WorkFlowRequestStatus" value="#[message.payloadAs(java.lang.String)]" doc:name="Set_WFRequestStatus"/>
+        <logger message="#[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars['WorkFlowRequestStatus'] =='PENDING_APPROVAL']">
+                <flow-ref name="ApproveProjectFlow" doc:name="ApproveProjectFlow"/>
+            </when>
+            <when expression="#[flowVars['counter']==10 || flowVars['WorkFlowRequestStatus'] == 'COMPLETED']">
+                <set-payload value="#['WorkFlowStatus ' +  message.payloadAs(java.lang.String)]" doc:name="Set WFCompletedPayload"/>
+                <logger message="#[flowVars['WorkFlowRequestStatus'] ]" level="INFO" doc:name="Logger"/>
+            </when>
+            <when expression="#[flowVars['WorkFlowRequestStatus'] == 'FAILED']">
+                <component class="fd.training.mulesoft.custom.StatusException" doc:name="getBuild&amp;DeployException"/>
+            </when>
+            <otherwise>
+                <component class="fd.training.mulesoft.custom.WFRequestStatusSleep" doc:name="ThreadSleep"/>
+                <set-variable variableName="WorkFlowRequestStatusCounter" value="#[flowVars['WorkFlowRequestStatusCounter'] + 1]" doc:name="Increment_WFRequestStatusCounter"/>
+                <logger message="#[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
+                <flow-ref name="WorkFlowRequestStatusFlow" doc:name="WorkFlowRequestStatusFlow"/>
+            </otherwise>
+        </choice>
+    </flow>
+    <sub-flow name="ApproveProjectFlow">
+        <set-payload value="{     &quot;authentication&quot;:     {         &quot;userId&quot;: &quot;#['${fd.username}']&quot;,         &quot;password&quot;: &quot;#['${fd.password}']&quot;     },     &quot;workflowRequestId&quot;: #[flowVars.WorkFlowRequestID] }" doc:name="SetApprovetaskPayload"/>
+        <http:request config-ref="Approve_Request_Configuration" path="/approveProject" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <set-variable variableName="WFApprovalStatus" value="#[message.payloadAs(java.lang.String)]" doc:name="Approval_Task variable"/>
+        <logger message="Approved  #[flowVars['WFApprovalStatus']]" level="INFO" doc:name="Logger"/>
+        <flow-ref name="WFRequestStatusCounter" doc:name="WFRequestStatusCounter"/>
+        <flow-ref name="WorkFlowRequestStatusFlow" doc:name="WorkFlowRequestStatusFlow"/>
+    </sub-flow>
+
+</mule>
